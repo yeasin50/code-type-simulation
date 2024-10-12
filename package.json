@@ -14,8 +14,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "extension.getCursorPosition",
-        "title": "Get Cursor Position"
+        "command": "extension.openTypewriterPanel",
+        "title": "Open Typewriter Panel"
       }
     ]
   },
