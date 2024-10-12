@@ -1,7 +1,6 @@
-// The module 'vscode' contains the VS Code extensibility API
 import * as vscode from 'vscode';
 
-let lastPosition: vscode.Position | null = null;
+let lastPosition: vscode.Position | null = null; // Store last cursor position
 let storedDocument: vscode.TextDocument | null = null; // Store the last active document
 let currentEditor: vscode.TextEditor | undefined; // Store the current active editor reference
 let panel: vscode.WebviewPanel | undefined; // Webview panel
@@ -17,13 +16,13 @@ export function activate(context: vscode.ExtensionContext) {
 			storedDocument = currentEditor.document; // Store the active document
 
 			if (panel) {
-				// If the panel already exists, show it and return
 				panel.reveal(vscode.ViewColumn.Beside);
+				panel.webview.html = getWebviewContent(vscode.window.visibleTextEditors.map(editor => editor.document.fileName));
 				return;
 			}
 
 			panel = vscode.window.createWebviewPanel(
-				'typewriterPanel', // Identifies the type of the webview. Used internally
+				'typewriterPanel', // Identifies the type of the webview
 				'Typewriter Effect', // Title of the panel displayed to the user
 				vscode.ViewColumn.Beside, // Open the webview beside the editor
 				{
@@ -31,10 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			);
 
-			// Get the list of opened tab names
-			const openedTabs = vscode.window.visibleTextEditors.map(editor => editor.document.fileName);
-			// Set the HTML content of the webview, including the dropdown
-			panel.webview.html = getWebviewContent(openedTabs);
+			panel.webview.html = getWebviewContent(vscode.window.visibleTextEditors.map(editor => editor.document.fileName));
 
 			// Listen for messages from the webview
 			panel.webview.onDidReceiveMessage(
@@ -57,8 +53,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Retain focus on the editor after opening the webview
 			vscode.window.showTextDocument(currentEditor.document, { preview: false, preserveFocus: true });
-
-			// Draw an arrow at the last cursor position
 			drawArrowAtPosition(currentEditor, lastPosition);
 		} else {
 			vscode.window.showInformationMessage('No active editor found!');
@@ -80,14 +74,12 @@ async function triggerTypewriter(text: string, speed: number) {
 async function handlePaste(text: string) {
 	if (currentEditor) {
 		const position = currentEditor.selection.active; // Get the current cursor position
-		const lines = text.split('\n').filter(line => line.trim() !== ''); // Split text into lines and filter empty lines
+		const lines = text.split('\n').filter(line => line.trim().length > 0); // Only keep non-empty lines
 		let newPosition = position;
 
 		for (const line of lines) {
-			// Insert each line at the current cursor position
 			await insertTextAtPosition(currentEditor, newPosition, line);
-			// Move the cursor down by one line after pasting
-			newPosition = newPosition.translate(1, 0); // Move cursor down
+			newPosition = newPosition.translate(1, 0); // Move cursor down for the next line
 		}
 	} else {
 		vscode.window.showInformationMessage('No active editor found!');
@@ -96,16 +88,25 @@ async function handlePaste(text: string) {
 
 async function insertTextAtPosition(editor: vscode.TextEditor, position: vscode.Position, text: string) {
 	await editor.edit(editBuilder => {
-		editBuilder.insert(position, text + '\n'); // Add a newline after the inserted text
+		editBuilder.insert(position, text ); // Insert text followed by a newline
 	});
 }
 
 // Typewriter function
 async function typeWriteText(editor: vscode.TextEditor, position: vscode.Position, text: string, speed: number) {
-	for (const char of text) {
-		await new Promise(resolve => setTimeout(resolve, speed));
-		await insertTextAtPosition(editor, position, char); // Insert each character
-		position = position.translate(0, 1); // Move cursor to the right
+	const lines = text.split('\n'); // Split the text by new lines
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i].replace(/\s+/g, ' '); // Replace multiple spaces with a single space
+		for (const char of line) {
+			await new Promise(resolve => setTimeout(resolve, speed));
+			await insertTextAtPosition(editor, position, char); // Insert each character
+			position = position.translate(0, 1); // Move cursor to the right
+		}
+		// Move cursor down to the start of the next line
+		if (i < lines.length - 1) {
+			position = position.translate(1, -line.length); // Move down one line and back to the start of the new line
+		}
 	}
 }
 
@@ -122,6 +123,7 @@ async function selectSpecificTab(tabName: string) {
 			vscode.window.showInformationMessage('Switched to the desired tab!');
 			// Remember the cursor position before switching
 			lastPosition = editor.selection.active;
+			drawArrowAtPosition(editor, lastPosition); // Draw the arrow at the new position
 		} else {
 			vscode.window.showInformationMessage('No matching tab found for this document!');
 		}
@@ -135,7 +137,7 @@ function drawArrowAtPosition(editor: vscode.TextEditor, position: vscode.Positio
 	const decorationType = vscode.window.createTextEditorDecorationType({
 		after: {
 			contentText: '➜',
-			color: 'green',
+			color: 'blue',
 			fontStyle: 'bold'
 		},
 		rangeBehavior: vscode.DecorationRangeBehavior.OpenOpen
