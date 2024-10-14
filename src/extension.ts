@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 
 let lastPosition: vscode.Position | null = null; // Store last cursor position
-let storedDocument: vscode.TextDocument | null = null; // Store the last active document
 let currentEditor: vscode.TextEditor | undefined; // Store the current active editor reference
 let panel: vscode.WebviewPanel | undefined; // Webview panel  
 let decorationType: vscode.TextEditorDecorationType; // To hold the decoration for the arrow
@@ -21,16 +20,14 @@ export function activate(context: vscode.ExtensionContext) {
 		rangeBehavior: vscode.DecorationRangeBehavior.OpenOpen
 	});
 
-	let disposable = vscode.commands.registerCommand('extension.openTypewriterPanel', () => {
+	const disposable = vscode.commands.registerCommand('extension.openTypewriterPanel', () => {
 		currentEditor = vscode.window.activeTextEditor; // Store the current active editor reference
 
 		if (currentEditor) {
 			lastPosition = currentEditor.selection.active; // Store the cursor position
-			storedDocument = currentEditor.document; // Store the active document
 
 			if (panel) {
-				panel.reveal(vscode.ViewColumn.Beside);
-				panel.webview.html = getWebviewContent(vscode.window.visibleTextEditors.map(editor => editor.document.fileName));
+				panel.reveal(vscode.ViewColumn.Beside); // Bring the existing panel to focus
 				return;
 			}
 
@@ -50,7 +47,6 @@ export function activate(context: vscode.ExtensionContext) {
 				message => {
 					switch (message.command) {
 						case 'triggerTypewriter':
-							// Only trigger typewriter if not already typing
 							if (!isTyping) {
 								isTyping = true; // Set a flag indicating typing is in progress
 								triggerTypewriter(message.text, message.speed).finally(() => {
@@ -59,7 +55,6 @@ export function activate(context: vscode.ExtensionContext) {
 							}
 							return;
 						case 'handlePaste':
-							// Handle pasting text based on autoTriggerOnPaste flag
 							if (autoTriggerOnPaste) {
 								handlePaste(message.text); // Only handle paste if auto-trigger is enabled
 							}
@@ -83,13 +78,15 @@ export function activate(context: vscode.ExtensionContext) {
 			);
 
 			// Event listener for editor changes
-			vscode.window.onDidChangeActiveTextEditor(editor => {
+			const editorChangeListener = vscode.window.onDidChangeActiveTextEditor(editor => {
 				if (editor) {
 					currentEditor = editor; // Update current editor reference
 					lastPosition = currentEditor.selection.active; // Update last position when switching editors
 					drawArrowAtPosition(currentEditor, lastPosition); // Draw the arrow at the new position
 				}
 			});
+
+			context.subscriptions.push(editorChangeListener);
 
 			// Retain focus on the editor after opening the webview
 			vscode.window.showTextDocument(currentEditor.document, { preview: false, preserveFocus: true });
@@ -100,6 +97,13 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(disposable);
+
+	// Clean up when the panel is disposed
+	if (panel) {
+		panel.onDidDispose(() => {
+			panel = undefined; // Reset the panel reference when disposed
+		});
+	}
 }
 
 async function triggerTypewriter(text: string, speed: number) {
@@ -216,13 +220,7 @@ function drawArrowAtPosition(editor: vscode.TextEditor, position: vscode.Positio
 function getWebviewContent(openedTabs: string[]): string {
 	return `<!DOCTYPE html>
     <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Typewriter Effect</title>
-    </head>
     <body>
-        <h1>Typewriter Effect</h1>
         <textarea id="textInput" rows="10" cols="30" placeholder="Enter text here..."></textarea>
         <br>
         <input type="number" id="speedInput" placeholder="Speed (ms)" value="${typingSpeed}" min="1" />
@@ -288,6 +286,7 @@ export function deactivate() {
 	// Clean up when extension is deactivated
 	if (panel) {
 		panel.dispose();
+		panel = undefined; // Clear reference to the panel
 	}
 	decorationType.dispose(); // Dispose of the arrow decoration
 }
