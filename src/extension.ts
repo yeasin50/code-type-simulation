@@ -3,12 +3,13 @@ import * as vscode from 'vscode';
 let lastPosition: vscode.Position | null = null; // Store last cursor position
 let storedDocument: vscode.TextDocument | null = null; // Store the last active document
 let currentEditor: vscode.TextEditor | undefined; // Store the current active editor reference
-let panel: vscode.WebviewPanel | undefined; // Webview panel
+let panel: vscode.WebviewPanel | undefined; // Webview panel  
 let decorationType: vscode.TextEditorDecorationType; // To hold the decoration for the arrow
 
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "code-type-simulation" is now active!');
 
+	// Decoration for showing the arrow where the typewriter will begin
 	decorationType = vscode.window.createTextEditorDecorationType({
 		after: {
 			contentText: '➜',
@@ -25,12 +26,18 @@ export function activate(context: vscode.ExtensionContext) {
 			lastPosition = currentEditor.selection.active; // Store the cursor position
 			storedDocument = currentEditor.document; // Store the active document
 
+			// Handle existing panel case
 			if (panel) {
-				panel.reveal(vscode.ViewColumn.Beside);
-				panel.webview.html = getWebviewContent(vscode.window.visibleTextEditors.map(editor => editor.document.fileName));
-				return;
+				if (panel.visible) {
+					panel.reveal(vscode.ViewColumn.Beside);
+					panel.webview.html = getWebviewContent(vscode.window.visibleTextEditors.map(editor => editor.document.fileName));
+					return;
+				} else {
+					panel.dispose();
+				}
 			}
 
+			// Create a new webview panel
 			panel = vscode.window.createWebviewPanel(
 				'typewriterPanel', // Identifies the type of the webview
 				'Typewriter Effect', // Title of the panel displayed to the user
@@ -49,8 +56,8 @@ export function activate(context: vscode.ExtensionContext) {
 						case 'triggerTypewriter':
 							triggerTypewriter(message.text, message.speed); // Pass speed along with text
 							return;
-						case 'handlePaste':
-							handlePaste(message.text); // Handle paste text
+						case 'handleClear':
+							handleClear(); // Clear text in the textarea
 							return;
 						case 'selectTab':
 							selectSpecificTab(message.tabName); // Select specific tab by name
@@ -60,6 +67,11 @@ export function activate(context: vscode.ExtensionContext) {
 				undefined,
 				context.subscriptions
 			);
+
+			// Dispose of panel when closed
+			panel.onDidDispose(() => {
+				panel = undefined;
+			}, null, context.subscriptions);
 
 			// Event listener for cursor position change
 			vscode.window.onDidChangeTextEditorSelection(event => {
@@ -80,6 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(disposable);
 }
 
+// Function to trigger the typewriter effect
 async function triggerTypewriter(text: string, speed: number) {
 	if (currentEditor) {
 		let position = lastPosition || currentEditor.selection.active; // Use the last stored position
@@ -89,25 +102,15 @@ async function triggerTypewriter(text: string, speed: number) {
 	}
 }
 
-async function handlePaste(text: string) {
-	if (currentEditor) {
-		const position = currentEditor.selection.active; // Get the current cursor position
-		const lines = text.split('\n').filter(line => line.trim().length > 0); // Only keep non-empty lines
-		let newPosition = position;
-
-		for (const line of lines) {
-			await insertTextAtPosition(currentEditor, newPosition, line);
-			newPosition = newPosition.translate(1, 0); // Move cursor down for the next line
-		}
-	} else {
-		vscode.window.showInformationMessage('No active editor found!');
+// Clear text area when the clear button is pressed
+function handleClear() {
+	if (panel) {
+		panel.webview.postMessage({ command: 'clearText' });
 	}
 }
-
 async function insertTextAtPosition(editor: vscode.TextEditor, position: vscode.Position, text: string) {
 	await editor.edit(editBuilder => {
-		// Insert text without adding an extra newline
-		editBuilder.insert(position, text);
+		editBuilder.insert(position, text); // Insert text at the given position
 	});
 }
 
@@ -148,8 +151,7 @@ async function selectSpecificTab(tabName: string) {
 				preserveFocus: true,
 				preview: false, // Prevent closing the tab on switching
 			});
-			vscode.window.showInformationMessage('Switched to the desired tab!');
-			// Remember the cursor position before switching
+			vscode.window.showInformationMessage(`Switched to tab: ${tabName}`);
 			lastPosition = editor.selection.active;
 			drawArrowAtPosition(editor, lastPosition); // Draw the arrow at the new position
 		} else {
@@ -165,15 +167,16 @@ function drawArrowAtPosition(editor: vscode.TextEditor, position: vscode.Positio
 	editor.setDecorations(decorationType, [{ range: new vscode.Range(position, position) }]);
 }
 
-// Function to generate the webview content with the dropdown
+// Function to generate the webview content with the dropdown, start, and clear button
 function getWebviewContent(openedTabs: string[]): string {
 	return `<!DOCTYPE html>
     <html lang="en">
     <body>
         <h1>Typewriter Effect</h1>
-        <textarea id="textInput" rows="4" cols="50" placeholder="Type your text here..."></textarea>
-        <input type="number" id="speedInput" value="100" placeholder="Speed (ms)">
+        <textarea id="textInput" rows="4" cols="50" placeholder="Type your text here..."></textarea><br>
+        <input type="number" id="speedInput" value="100" placeholder="Speed (ms)"><br>
         <button id="typeButton">Start Typewriter</button>
+        <button id="clearButton">Clear</button>
         <select id="tabSelector">
             ${openedTabs.map(tab => `<option value="${tab}">${tab}</option>`).join('')}
         </select>
@@ -181,6 +184,7 @@ function getWebviewContent(openedTabs: string[]): string {
             const vscode = acquireVsCodeApi();
             let pastedText = '';
 
+            // Start button event listener
             document.getElementById('typeButton').addEventListener('click', () => {
                 const text = document.getElementById('textInput').value || pastedText; // Use pastedText if empty
                 const speed = parseInt(document.getElementById('speedInput').value) || 100; // Default speed
@@ -188,14 +192,23 @@ function getWebviewContent(openedTabs: string[]): string {
                 pastedText = ''; // Clear pastedText after triggering
             });
 
+            // Clear button event listener
+            document.getElementById('clearButton').addEventListener('click', () => {
+                document.getElementById('textInput').value = ''; // Clear text input
+                vscode.postMessage({ command: 'handleClear' });
+            });
+
+            // Tab selection event listener
             document.getElementById('tabSelector').addEventListener('change', (event) => {
                 vscode.postMessage({ command: 'selectTab', tabName: event.target.value });
             });
 
-            document.addEventListener('paste', (event) => {
-                event.preventDefault(); // Prevent the default paste behavior
-                pastedText = event.clipboardData.getData('text/plain'); // Store the pasted text
-                document.getElementById('textInput').value += pastedText; // Optionally show the pasted text in textarea
+            // Listen for messages to clear the textarea
+            window.addEventListener('message', event => {
+                const message = event.data;
+                if (message.command === 'clearText') {
+                    document.getElementById('textInput').value = '';
+                }
             });
         </script>
     </body>
