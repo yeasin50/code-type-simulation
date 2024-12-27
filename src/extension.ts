@@ -5,7 +5,7 @@ let storedDocument: vscode.TextDocument | null = null; // Store the last active 
 let currentEditor: vscode.TextEditor | undefined; // Store the current active editor reference
 let panel: vscode.WebviewPanel | undefined; // Webview panel  
 let decorationType: vscode.TextEditorDecorationType; // To hold the decoration for the arrow
-let showArrow = true; // This will control the visibility of the arrow
+let showArrow = true; // Arrow visibility toggle
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Congratulations, your extension "code-type-simulation" is now active!');
@@ -65,7 +65,9 @@ export function activate(context: vscode.ExtensionContext) {
                             return;
                         case 'toggleArrowVisibility':
                             showArrow = message.isVisible; // Update the arrow visibility based on the checkbox
-                            drawArrowAtPosition(currentEditor, lastPosition); // Redraw the arrow with the new visibility state
+                            if (currentEditor && lastPosition) {
+                                drawArrowAtPosition(currentEditor, lastPosition); // Redraw the arrow with the new visibility state
+                            }
                             return;
                     }
                 },
@@ -82,22 +84,28 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.onDidChangeTextEditorSelection(event => {
                 if (event.textEditor === currentEditor) {
                     lastPosition = event.selections[0].active; // Update the last position to the current active selection
-                    drawArrowAtPosition(currentEditor, lastPosition); // Redraw the arrow at the new position
+                    if (showArrow) {
+                        drawArrowAtPosition(currentEditor, lastPosition); // Redraw the arrow at the new position
+                    }
                 }
             });
 
-            // Event listener for tab changes (focus change)
+            // Event listener for active editor change
             vscode.window.onDidChangeActiveTextEditor(editor => {
                 if (editor) {
-                    currentEditor = editor; // Update the current editor
-                    lastPosition = currentEditor.selection.active; // Update the last position
-                    drawArrowAtPosition(currentEditor, lastPosition); // Redraw the arrow for the new active editor
+                    currentEditor = editor; // Update the active editor reference
+                    lastPosition = editor.selection.active; // Update the cursor position
+                    if (showArrow) {
+                        drawArrowAtPosition(editor, lastPosition); // Draw arrow in the new active editor
+                    }
                 }
             });
 
             // Retain focus on the editor after opening the webview
             vscode.window.showTextDocument(currentEditor.document, { preview: false, preserveFocus: true });
-            drawArrowAtPosition(currentEditor, lastPosition);
+            if (showArrow) {
+                drawArrowAtPosition(currentEditor, lastPosition);
+            }
         } else {
             vscode.window.showInformationMessage('No active editor found!');
         }
@@ -167,9 +175,11 @@ async function selectSpecificTab(tabName: string) {
                 preview: false, // Prevent closing the tab on switching
             });
             vscode.window.showInformationMessage(`Switched to tab: ${tabName}`);
-            currentEditor = editor; // Update current editor
+            currentEditor = editor;
             lastPosition = editor.selection.active;
-            drawArrowAtPosition(editor, lastPosition); // Draw the arrow at the new position
+            if (showArrow) {
+                drawArrowAtPosition(editor, lastPosition); // Draw the arrow at the new position
+            }
         } else {
             vscode.window.showInformationMessage('No matching tab found for this document!');
         }
@@ -180,11 +190,11 @@ async function selectSpecificTab(tabName: string) {
 
 // Function to draw an arrow at the last cursor position
 function drawArrowAtPosition(editor: vscode.TextEditor, position: vscode.Position) {
-    if (showArrow) {
-        editor.setDecorations(decorationType, [{ range: new vscode.Range(position, position) }]);
-    } else {
-        editor.setDecorations(decorationType, []); // Clear the arrow decoration if not visible
+    if (!showArrow) {
+        editor.setDecorations(decorationType, []); // Clear decorations if arrow is hidden
+        return;
     }
+    editor.setDecorations(decorationType, [{ range: new vscode.Range(position, position) }]);
 }
 
 // Function to generate the webview content with the dropdown, start, and clear button
@@ -197,23 +207,20 @@ function getWebviewContent(openedTabs: string[]): string {
         <input type="number" id="speedInput" value="100" placeholder="Speed (ms)"><br>
         <button id="typeButton">Start Typewriter</button>
         <button id="clearButton">Clear</button>
+        <label>
+            <input type="checkbox" id="arrowToggle" checked> Show Arrow
+        </label>
         <select id="tabSelector">
             ${openedTabs.map(tab => `<option value="${tab}">${tab}</option>`).join('')}
-        </select><br>
-        <label>
-            <input type="checkbox" id="toggleArrowVisibility" checked>
-            Show Arrow
-        </label>
+        </select>
         <script>
             const vscode = acquireVsCodeApi();
-            let pastedText = '';
 
             // Start button event listener
             document.getElementById('typeButton').addEventListener('click', () => {
-                const text = document.getElementById('textInput').value || pastedText; // Use pastedText if empty
+                const text = document.getElementById('textInput').value;
                 const speed = parseInt(document.getElementById('speedInput').value) || 100; // Default speed
                 vscode.postMessage({ command: 'triggerTypewriter', text: text, speed: speed });
-                pastedText = ''; // Clear pastedText after triggering
             });
 
             // Clear button event listener
@@ -222,15 +229,14 @@ function getWebviewContent(openedTabs: string[]): string {
                 vscode.postMessage({ command: 'handleClear' });
             });
 
+            // Arrow toggle event listener
+            document.getElementById('arrowToggle').addEventListener('change', (event) => {
+                vscode.postMessage({ command: 'toggleArrowVisibility', isVisible: event.target.checked });
+            });
+
             // Tab selection event listener
             document.getElementById('tabSelector').addEventListener('change', (event) => {
                 vscode.postMessage({ command: 'selectTab', tabName: event.target.value });
-            });
-
-            // Arrow visibility toggle event listener
-            document.getElementById('toggleArrowVisibility').addEventListener('change', (event) => {
-                const isChecked = event.target.checked;
-                vscode.postMessage({ command: 'toggleArrowVisibility', isVisible: isChecked });
             });
 
             // Listen for messages to clear the textarea
