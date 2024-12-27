@@ -1,93 +1,27 @@
-# code-type-simulation README
+# Code Type Simulation Extension
 
-> npm run compile
-> then `f5`
-
-// Typewriter effect function
-async function typeWriteText(editor: vscode.TextEditor, position: vscode.Position, text: string) {
-for (let i = 0; i < text.length; i++) {
-// Insert one character at a time
-await insertTextAtPosition(editor, position, text[i]);
-// Move cursor to the right
-position = position.translate(0, 1);
-// Wait for a bit before typing the next character
-await new Promise(resolve => setTimeout(resolve, 100)); // Adjust typing speed here
-}
-}
-
-// Function to insert text at a specific position
-async function insertTextAtPosition(editor: vscode.TextEditor, position: vscode.Position, text: string) {
-await editor.edit(editBuilder => {
-editBuilder.insert(position, text);
-});
-}
-
-This is the README for your extension "code-type-simulation". After writing up a brief description, we recommend including the following sections.
+This Visual Studio Code extension allows users to open a new window and simulate text typing based on the input they provide.
 
 ## Features
+- Open a new window for focused text simulation.
+- Simulate typing text at a configurable speed.
+- Enhance your coding or writing experience with visual typing effects.
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+## Usage
+1. Install the extension.
+2. Use the command **"Start Typing Simulation"** from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`).
+3. Provide the text you want to simulate.
+4. Watch the simulated typing unfold in a new window.
 
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Configuration
+You can configure the typing speed and other settings by editing the extension's settings in the VS Code preferences.
 
 ## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-- `myExtension.enable`: Enable/disable this extension.
-- `myExtension.thing`: Set to `blah` to do something.
+- Visual Studio Code version 1.76.0 or newer.
 
 ## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
+- No support for multi-language text simulation yet.
 
 ## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-- [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-- Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-- Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-- Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-- [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-- [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+### 0.0.1
+- Initial release with basic text simulation functionality.
